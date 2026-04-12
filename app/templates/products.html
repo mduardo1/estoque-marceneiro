@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Produtos</title>
+</head>
+<body>
+
+<h1>Controle de Estoque 🪵</h1>
+
+<form id="productForm">
+    <input type="text" id="name" placeholder="Nome do produto" required>
+    <input type="text" id="material" placeholder="Material (MDF / Pinus)">
+    <input type="number" id="quantity" placeholder="Quantidade">
+    <input type="text" id="size" placeholder="Tamanho (ex: 60x40)">
+
+    <button type="submit">Adicionar</button>
+</form>
+
+<h2>Produtos cadastrados</h2>
+<ul id="productList"></ul>
+
+<script>
+document.getElementById("productForm").addEventListener("submit", async function(e) {
+    e.preventDefault();
+
+    const product = {
+        name: document.getElementById("name").value,
+        material: document.getElementById("material").value,
+        quantity: document.getElementById("quantity").value,
+        size: document.getElementById("size").value
+    };
+
+    const response = await fetch("/add_product", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(product)
+    });
+
+    const data = await response.json();
+
+    alert(data.message);
+    loadProducts();
+});
+
+async function loadProducts() {
+    const response = await fetch("/get_products");
+    const products = await response.json();
+
+    const list = document.getElementById("productList");
+    list.innerHTML = "";
+
+    products.forEach(p => {
+        const li = document.createElement("li");
+        li.innerText = `${p.name} - ${p.material} - ${p.quantity} un - ${p.size}`;
+        list.appendChild(li);
+    });
+}
+
+loadProducts();
+</script>
+
+</body>
+</html>
