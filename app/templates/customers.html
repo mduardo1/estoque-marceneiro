@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clientes | Estoque Marceneiro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="panel-body">
+    <div class="panel-layout">
+        <aside class="sidebar">
+            <div>
+                <span class="eyebrow">Estoque Marceneiro</span>
+                <h2>Clientes</h2>
+                <p class="sidebar-copy">Uma tela dedicada para relacionamento e atendimento.</p>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="/menu">Menu</a>
+                <a href="/products">Produtos</a>
+                <a href="/customers" class="is-active">Clientes</a>
+                <a href="/orders">Orcamentos</a>
+                <a href="/dashboard">Dashboard</a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <span>{{ email }}</span>
+                <button class="btn btn-secondary btn-block" onclick="logout()">Sair</button>
+            </div>
+        </aside>
+
+        <main class="content-area">
+            <section class="hero-panel">
+                <div>
+                    <span class="eyebrow">Tela de clientes</span>
+                    <h1>Organize os dados principais de cada cliente da marcenaria.</h1>
+                    <p>Cadastre nome fantasia, CNPJ, telefone e endereco em uma tabela unica.</p>
+                </div>
+            </section>
+
+            <section class="split-grid">
+                <article class="surface-card">
+                    <h3>Novo cliente</h3>
+                    <form id="customerForm" class="stack-form">
+                        <label>
+                            <span>Nome fantasia</span>
+                            <input type="text" id="customerTradeName" placeholder="Nome fantasia do cliente" required>
+                        </label>
+
+                        <label>
+                            <span>CNPJ</span>
+                            <input type="text" id="customerCnpj" placeholder="00.000.000/0000-00" required>
+                        </label>
+
+                        <label>
+                            <span>Telefone</span>
+                            <input type="text" id="customerPhone" placeholder="(11) 99999-9999" required>
+                        </label>
+
+                        <label>
+                            <span>CEP</span>
+                            <input type="text" id="customerCep" placeholder="00000-000" required>
+                        </label>
+
+                        <label>
+                            <span>Endereco</span>
+                            <input type="text" id="customerAddress" placeholder="Rua, numero, bairro, cidade" required>
+                        </label>
+
+                        <button type="submit" class="btn btn-primary btn-block">Salvar cliente</button>
+                    </form>
+                    <p id="customerMessage" class="form-message"></p>
+                </article>
+
+                <article class="surface-card">
+                    <div class="section-head">
+                        <div>
+                            <h3>Tabela de clientes</h3>
+                            <p class="muted">Dados persistidos no banco para uso em orcamentos.</p>
+                        </div>
+                        <span class="pill" id="customerCount">0 cliente(s)</span>
+                    </div>
+
+                    <div class="table-shell">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Nome fantasia</th>
+                                    <th>CNPJ</th>
+                                    <th>Telefone</th>
+                                    <th>Endereco</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="customerTableBody"></tbody>
+                        </table>
+                    </div>
+                </article>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        function applyCnpjMask(value) {
+            const digits = value.replace(/\D/g, "").slice(0, 14);
+            if (digits.length <= 2) return digits;
+            if (digits.length <= 5) return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+            if (digits.length <= 8) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}`;
+            if (digits.length <= 12) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`;
+            return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12, 14)}`;
+        }
+
+        function applyPhoneMask(value) {
+            const digits = value.replace(/\D/g, "").slice(0, 11);
+
+            if (digits.length <= 10) {
+                return digits
+                    .replace(/^(\d{2})(\d)/g, "($1) $2")
+                    .replace(/(\d{4})(\d)/, "$1-$2");
+            }
+
+            return digits
+                .replace(/^(\d{2})(\d)/g, "($1) $2")
+                .replace(/(\d{5})(\d)/, "$1-$2");
+        }
+
+        function applyCepMask(value) {
+            const digits = value.replace(/\D/g, "").slice(0, 8);
+            return digits.replace(/(\d{5})(\d)/, "$1-$2");
+        }
+
+        async function fillAddressByCep() {
+            const cep = document.getElementById("customerCep").value.replace(/\D/g, "");
+            if (cep.length !== 8) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+                const data = await response.json();
+
+                if (data.erro) {
+                    document.getElementById("customerMessage").textContent = "CEP nao encontrado.";
+                    return;
+                }
+
+                const fullAddress = [
+                    data.logradouro,
+                    data.bairro,
+                    `${data.localidade} - ${data.uf}`
+                ].filter(Boolean).join(", ");
+
+                document.getElementById("customerAddress").value = fullAddress;
+                document.getElementById("customerMessage").textContent = "";
+            } catch (error) {
+                document.getElementById("customerMessage").textContent = "Nao foi possivel buscar o endereco pelo CEP.";
+            }
+        }
+
+        async function renderCustomers() {
+            const response = await fetch("/api/customers");
+            if (!response.ok) {
+                return;
+            }
+
+            const customers = await response.json();
+            const list = document.getElementById("customerTableBody");
+            const count = document.getElementById("customerCount");
+
+            count.textContent = `${customers.length} cliente(s)`;
+            list.innerHTML = "";
+
+            if (!customers.length) {
+                list.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum cliente cadastrado ainda.</td></tr>';
+                return;
+            }
+
+            customers.forEach((customer) => {
+                list.innerHTML += `
+                    <tr>
+                        <td>${customer.trade_name}</td>
+                        <td>${customer.cnpj}</td>
+                        <td>${customer.phone}</td>
+                        <td>${customer.address}</td>
+                        <td>
+                            <button class="btn btn-danger btn-small" onclick="removeCustomer(${customer.id})">Excluir</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        document.getElementById("customerCnpj").addEventListener("input", (event) => {
+            event.target.value = applyCnpjMask(event.target.value);
+        });
+
+        document.getElementById("customerPhone").addEventListener("input", (event) => {
+            event.target.value = applyPhoneMask(event.target.value);
+        });
+
+        document.getElementById("customerCep").addEventListener("input", (event) => {
+            event.target.value = applyCepMask(event.target.value);
+        });
+
+        document.getElementById("customerCep").addEventListener("blur", fillAddressByCep);
+
+        async function removeCustomer(customerId) {
+            const response = await fetch(`/api/customers/${customerId}`, { method: "DELETE" });
+            const data = await response.json();
+            document.getElementById("customerMessage").textContent = data.message || "";
+            renderCustomers();
+        }
+
+        document.getElementById("customerForm").addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            const payload = {
+                trade_name: document.getElementById("customerTradeName").value,
+                cnpj: document.getElementById("customerCnpj").value,
+                phone: document.getElementById("customerPhone").value,
+                address: `CEP ${document.getElementById("customerCep").value} - ${document.getElementById("customerAddress").value}`
+            };
+
+            const response = await fetch("/api/customers", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+            document.getElementById("customerMessage").textContent = data.message || "";
+
+            if (response.ok) {
+                document.getElementById("customerForm").reset();
+            }
+
+            renderCustomers();
+        });
+
+        async function logout() {
+            await fetch("/logout");
+            window.location.href = "/";
+        }
+
+        renderCustomers();
+    </script>
+</body>
+</html>

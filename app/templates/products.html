@@ -2,65 +2,224 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Produtos</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Produtos | Estoque Marceneiro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
+<body class="panel-body">
+    <div class="panel-layout">
+        <aside class="sidebar">
+            <div>
+                <span class="eyebrow">Estoque Marceneiro</span>
+                <h2>Produtos</h2>
+                <p class="sidebar-copy">Cadastre itens e acompanhe quantidades.</p>
+            </div>
 
-<h1>Controle de Estoque 🪵</h1>
+            <nav class="sidebar-nav">
+                <a href="/menu">Menu</a>
+                <a href="/products" class="is-active">Produtos</a>
+                <a href="/customers">Clientes</a>
+                <a href="/orders">Orcamentos</a>
+                <a href="/dashboard">Dashboard</a>
+            </nav>
 
-<form id="productForm">
-    <input type="text" id="name" placeholder="Nome do produto" required>
-    <input type="text" id="material" placeholder="Material (MDF / Pinus)">
-    <input type="number" id="quantity" placeholder="Quantidade">
-    <input type="text" id="size" placeholder="Tamanho (ex: 60x40)">
+            <div class="sidebar-footer">
+                <span>{{ email }}</span>
+                <button class="btn btn-secondary btn-block" onclick="logout()">Sair</button>
+            </div>
+        </aside>
 
-    <button type="submit">Adicionar</button>
-</form>
+        <main class="content-area">
+            <section class="hero-panel">
+                <div>
+                    <span class="eyebrow">Cadastro de produtos</span>
+                    <h1>Tela de produto pronta para o dia a dia da oficina.</h1>
+                    <p>Inclua novos itens, visualize a lista atual e remova registros quando necessario.</p>
+                </div>
+            </section>
 
-<h2>Produtos cadastrados</h2>
-<ul id="productList"></ul>
+            <section class="split-grid">
+                <article class="surface-card">
+                    <h3>Novo produto</h3>
+                    <form id="productForm" class="stack-form">
+                        <label>
+                            <span>Nome do produto</span>
+                            <input type="text" id="name" placeholder="Ex: Armario sob medida" required>
+                        </label>
 
-<script>
-document.getElementById("productForm").addEventListener("submit", async function(e) {
-    e.preventDefault();
+                        <label>
+                            <span>Material</span>
+                            <input type="text" id="material" placeholder="Ex: MDF, pinus, compensado">
+                        </label>
 
-    const product = {
-        name: document.getElementById("name").value,
-        material: document.getElementById("material").value,
-        quantity: document.getElementById("quantity").value,
-        size: document.getElementById("size").value
-    };
+                        <label>
+                            <span>Quantidade</span>
+                            <input type="number" id="quantity" placeholder="0">
+                        </label>
 
-    const response = await fetch("/add_product", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify(product)
-    });
+                        <label>
+                            <span>Tamanho</span>
+                            <input type="text" id="size" placeholder="Ex: 2,10m x 0,60m">
+                        </label>
 
-    const data = await response.json();
+                        <label>
+                            <span>Valor do produto</span>
+                            <input type="text" id="price" inputmode="numeric" placeholder="0,00">
+                        </label>
 
-    alert(data.message);
-    loadProducts();
-});
+                        <button type="submit" class="btn btn-primary btn-block">Adicionar produto</button>
+                    </form>
+                    <p id="productMessage" class="form-message"></p>
+                </article>
 
-async function loadProducts() {
-    const response = await fetch("/get_products");
-    const products = await response.json();
+                <article class="surface-card">
+                    <div class="section-head">
+                        <div>
+                            <h3>Lista de produtos</h3>
+                            <p class="muted">Registros atuais do usuario logado.</p>
+                        </div>
+                        <span class="pill" id="totalProdutos">0 itens</span>
+                    </div>
 
-    const list = document.getElementById("productList");
-    list.innerHTML = "";
+                    <div class="table-shell">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nome</th>
+                                    <th>Material</th>
+                                    <th>Quantidade</th>
+                                    <th>Tamanho</th>
+                                    <th>Valor</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="lista-produtos"></tbody>
+                        </table>
+                    </div>
+                </article>
+            </section>
+        </main>
+    </div>
 
-    products.forEach(p => {
-        const li = document.createElement("li");
-        li.innerText = `${p.name} - ${p.material} - ${p.quantity} un - ${p.size}`;
-        list.appendChild(li);
-    });
-}
+    <script>
+        function formatCurrencyInput(value) {
+            const digits = value.replace(/\D/g, "");
+            if (!digits) {
+                return "";
+            }
 
-loadProducts();
-</script>
+            const number = Number(digits) / 100;
+            return number.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
 
+        document.getElementById("price").addEventListener("input", (event) => {
+            event.target.value = formatCurrencyInput(event.target.value);
+        });
+
+        document.getElementById("productForm").addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            const product = {
+                name: document.getElementById("name").value,
+                material: document.getElementById("material").value,
+                quantity: document.getElementById("quantity").value,
+                size: document.getElementById("size").value,
+                price: document.getElementById("price").value
+            };
+
+            const response = await fetch("/add_product", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(product)
+            });
+
+            const data = await response.json();
+            document.getElementById("productMessage").textContent = data.message || "";
+
+            if (response.ok) {
+                document.getElementById("productForm").reset();
+                carregarProdutos();
+            }
+        });
+
+        async function carregarProdutos() {
+            const response = await fetch("/get_products");
+
+            if (!response.ok) {
+                return;
+            }
+
+            const produtos = await response.json();
+            const lista = document.getElementById("lista-produtos");
+            const totalProdutos = document.getElementById("totalProdutos");
+
+            lista.innerHTML = "";
+            totalProdutos.textContent = `${produtos.length} item(ns)`;
+
+            produtos.forEach((produto) => {
+                lista.innerHTML += `
+                    <tr>
+                        <td>#${produto.id}</td>
+                        <td>${produto.name || "-"}</td>
+                        <td>${produto.material || "-"}</td>
+                        <td>
+                            <div class="inline-edit">
+                                <input
+                                    type="number"
+                                    class="table-input table-input-compact"
+                                    id="quantity-${produto.id}"
+                                    min="0"
+                                    value="${produto.quantity || 0}"
+                                >
+                                <button class="btn btn-secondary btn-small" onclick="atualizarQuantidade(${produto.id})">
+                                    Atualizar
+                                </button>
+                            </div>
+                        </td>
+                        <td>${produto.size || "-"}</td>
+                        <td>${Number(produto.price || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                        <td>
+                            <button class="btn btn-danger btn-small" onclick="deletarProduto(${produto.id})">
+                                Excluir
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        async function atualizarQuantidade(id) {
+            const quantity = document.getElementById(`quantity-${id}`).value;
+            const response = await fetch(`/update_product_quantity/${id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ quantity })
+            });
+            const data = await response.json();
+            document.getElementById("productMessage").textContent = data.message || "";
+
+            if (response.ok) {
+                carregarProdutos();
+            }
+        }
+
+        async function deletarProduto(id) {
+            const response = await fetch(`/delete_product/${id}`, { method: "DELETE" });
+            const data = await response.json();
+            document.getElementById("productMessage").textContent = data.message || "";
+            carregarProdutos();
+        }
+
+        async function logout() {
+            await fetch("/logout");
+            window.location.href = "/";
+        }
+
+        carregarProdutos();
+    </script>
 </body>
 </html>

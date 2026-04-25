@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orcamentos | Estoque Marceneiro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="panel-body">
+    <div class="panel-layout">
+        <aside class="sidebar">
+            <div>
+                <span class="eyebrow">Estoque Marceneiro</span>
+                <h2>Orcamentos</h2>
+                <p class="sidebar-copy">Monte pedidos com base no cliente e no estoque atual.</p>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="/menu">Menu</a>
+                <a href="/products">Produtos</a>
+                <a href="/customers">Clientes</a>
+                <a href="/orders" class="is-active">Orcamentos</a>
+                <a href="/dashboard">Dashboard</a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <span>{{ email }}</span>
+                <button class="btn btn-secondary btn-block" onclick="logout()">Sair</button>
+            </div>
+        </aside>
+
+        <main class="content-area">
+            <section class="hero-panel">
+                <div>
+                    <span class="eyebrow">Tela de orcamentos</span>
+                    <h1>Crie pedidos usando o CNPJ do cliente e o ID do produto.</h1>
+                    <p>Ao salvar, a quantidade do item e descontada automaticamente do estoque do produto correspondente.</p>
+                </div>
+            </section>
+
+            <section class="split-grid split-grid-wide">
+                <article class="surface-card">
+                    <h3>Novo orcamento</h3>
+                    <form id="orderForm" class="stack-form">
+                        <label>
+                            <span>CNPJ do cliente</span>
+                            <input type="text" id="orderCustomerCnpj" placeholder="00.000.000/0000-00" required>
+                        </label>
+
+                        <div class="table-shell">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>CNPJ do cliente</th>
+                                        <th>ID do produto</th>
+                                        <th>Quantidade</th>
+                                        <th>Valor total</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="orderItemsBody"></tbody>
+                            </table>
+                        </div>
+
+                        <button type="button" class="btn btn-secondary btn-block" onclick="addOrderRow()">Adicionar linha</button>
+
+                        <div class="order-summary">
+                            <strong>Total do pedido</strong>
+                            <span id="orderGrandTotal">R$ 0,00</span>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-block">Salvar pedido</button>
+                    </form>
+
+                    <p id="orderMessage" class="form-message"></p>
+                </article>
+
+                <article class="surface-card">
+                    <div class="section-head">
+                        <div>
+                            <h3>Pedidos salvos</h3>
+                            <p class="muted">Resumo dos orcamentos ja confirmados.</p>
+                        </div>
+                        <span class="pill" id="orderCount">0 pedido(s)</span>
+                    </div>
+
+                    <div class="table-shell">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nome do produto</th>
+                                    <th>CNPJ do cliente</th>
+                                    <th>Total</th>
+                                    <th>Data</th>
+                                </tr>
+                            </thead>
+                            <tbody id="savedOrdersBody"></tbody>
+                        </table>
+                    </div>
+                </article>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        let productsCache = [];
+
+        function formatCurrency(value) {
+            return Number(value || 0).toLocaleString("pt-BR", {
+                style: "currency",
+                currency: "BRL"
+            });
+        }
+
+        function applyCnpjMask(value) {
+            const digits = value.replace(/\D/g, "").slice(0, 14);
+            if (digits.length <= 2) return digits;
+            if (digits.length <= 5) return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+            if (digits.length <= 8) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}`;
+            if (digits.length <= 12) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`;
+            return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12, 14)}`;
+        }
+
+        function formatDateOnly(dateString) {
+            const date = new Date(dateString);
+            if (Number.isNaN(date.getTime())) {
+                return dateString;
+            }
+
+            return date.toLocaleDateString("pt-BR");
+        }
+
+        async function loadProducts() {
+            const response = await fetch("/get_products");
+            if (!response.ok) {
+                return;
+            }
+
+            productsCache = await response.json();
+            recalculateTotals();
+        }
+
+        function addOrderRow() {
+            const body = document.getElementById("orderItemsBody");
+            const row = document.createElement("tr");
+
+            row.innerHTML = `
+                <td class="muted js-customer-cnpj">-</td>
+                <td>
+                    <input type="number" class="table-input js-product-id" min="1" placeholder="ID" oninput="recalculateTotals()">
+                </td>
+                <td>
+                    <input type="number" class="table-input js-quantity" min="1" placeholder="0" oninput="recalculateTotals()">
+                </td>
+                <td class="js-line-total">R$ 0,00</td>
+                <td>
+                    <button type="button" class="btn btn-danger btn-small" onclick="removeOrderRow(this)">Excluir</button>
+                </td>
+            `;
+
+            body.appendChild(row);
+            syncCustomerCnpj();
+        }
+
+        function removeOrderRow(button) {
+            button.closest("tr").remove();
+            recalculateTotals();
+        }
+
+        function syncCustomerCnpj() {
+            const cnpj = document.getElementById("orderCustomerCnpj").value || "-";
+            document.querySelectorAll(".js-customer-cnpj").forEach((cell) => {
+                cell.textContent = cnpj;
+            });
+        }
+
+        function recalculateTotals() {
+            syncCustomerCnpj();
+
+            let orderTotal = 0;
+            document.querySelectorAll("#orderItemsBody tr").forEach((row) => {
+                const productId = Number(row.querySelector(".js-product-id").value || 0);
+                const quantity = Number(row.querySelector(".js-quantity").value || 0);
+                const product = productsCache.find((item) => Number(item.id) === productId);
+                const lineTotal = product ? Number(product.price || 0) * quantity : 0;
+
+                row.querySelector(".js-line-total").textContent = formatCurrency(lineTotal);
+                orderTotal += lineTotal;
+            });
+
+            document.getElementById("orderGrandTotal").textContent = formatCurrency(orderTotal);
+        }
+
+        async function loadOrders() {
+            const response = await fetch("/api/orders");
+            if (!response.ok) {
+                return;
+            }
+
+            const orders = await response.json();
+            const body = document.getElementById("savedOrdersBody");
+            const count = document.getElementById("orderCount");
+
+            count.textContent = `${orders.length} pedido(s)`;
+            body.innerHTML = "";
+
+            if (!orders.length) {
+                body.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum pedido salvo ainda.</td></tr>';
+                return;
+            }
+
+            orders.forEach((order) => {
+                body.innerHTML += `
+                    <tr>
+                        <td>#${order.id}</td>
+                        <td>${order.product_names || "-"}</td>
+                        <td>${order.customer_cnpj}</td>
+                        <td>${formatCurrency(order.total_value)}</td>
+                        <td>${formatDateOnly(order.created_at)}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        document.getElementById("orderCustomerCnpj").addEventListener("input", (event) => {
+            event.target.value = applyCnpjMask(event.target.value);
+            syncCustomerCnpj();
+        });
+
+        document.getElementById("orderForm").addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            const items = Array.from(document.querySelectorAll("#orderItemsBody tr")).map((row) => ({
+                product_id: row.querySelector(".js-product-id").value,
+                quantity: row.querySelector(".js-quantity").value
+            })).filter((item) => item.product_id && item.quantity);
+
+            if (!items.length) {
+                document.getElementById("orderMessage").textContent = "Adicione pelo menos um item ao pedido.";
+                return;
+            }
+
+            if (!window.confirm("Deseja salvar este pedido?")) {
+                return;
+            }
+
+            const payload = {
+                customer_cnpj: document.getElementById("orderCustomerCnpj").value,
+                items
+            };
+
+            const response = await fetch("/api/orders", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+            document.getElementById("orderMessage").textContent = data.message || "";
+
+            if (response.ok) {
+                document.getElementById("orderForm").reset();
+                document.getElementById("orderItemsBody").innerHTML = "";
+                addOrderRow();
+                await loadProducts();
+                await loadOrders();
+            }
+        });
+
+        async function logout() {
+            await fetch("/logout");
+            window.location.href = "/";
+        }
+
+        addOrderRow();
+        loadProducts();
+        loadOrders();
+    </script>
+</body>
+</html>

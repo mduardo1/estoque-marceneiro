@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu Principal | Estoque Marceneiro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="panel-body">
+    <div class="panel-layout">
+        <aside class="sidebar">
+            <div>
+                <span class="eyebrow">Estoque Marceneiro</span>
+                <h2>Menu principal</h2>
+                <p class="sidebar-copy">Acesse os modulos mais usados da oficina.</p>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="/menu" class="is-active">Menu</a>
+                <a href="/products">Produtos</a>
+                <a href="/customers">Clientes</a>
+                <a href="/orders">Orcamentos</a>
+                <a href="/dashboard">Dashboard</a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <span>{{ email }}</span>
+                <button class="btn btn-secondary btn-block" onclick="logout()">Sair</button>
+            </div>
+        </aside>
+
+        <main class="content-area">
+            <section class="hero-panel">
+                <div>
+                    <span class="eyebrow">Central de navegacao</span>
+                    <h1>Escolha a proxima tarefa da marcenaria.</h1>
+                    <p>
+                        O menu concentra os atalhos para produtos, clientes,
+                        dashboard e orcamentos com uma navegacao simples.
+                    </p>
+                </div>
+            </section>
+
+            <section class="feature-grid">
+                <a class="feature-card" href="/products">
+                    <span class="feature-kicker">Estoque</span>
+                    <h3>Produtos</h3>
+                    <p>Cadastre itens, acompanhe estoque, preco e identificacao por ID.</p>
+                </a>
+
+                <a class="feature-card" href="/customers">
+                    <span class="feature-kicker">Relacionamento</span>
+                    <h3>Clientes</h3>
+                    <p>Organize nome fantasia, CNPJ, telefone e endereco.</p>
+                </a>
+
+                <a class="feature-card" href="/dashboard">
+                    <span class="feature-kicker">Visao geral</span>
+                    <h3>Dashboard</h3>
+                    <p>Acompanhe indicadores rapidos e o ritmo da operacao.</p>
+                </a>
+
+                <a class="feature-card" href="/orders">
+                    <span class="feature-kicker">Pedidos</span>
+                    <h3>Orcamentos</h3>
+                    <p>Monte pedidos com base no CNPJ do cliente e no ID do produto.</p>
+                </a>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        async function logout() {
+            await fetch("/logout");
+            window.location.href = "/";
+        }
+    </script>
+</body>
+</html>
