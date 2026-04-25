@@ -3,11 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Estoque Marceneiro</title>
+    <title>Dashboard | Estoque Marceneiro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
-    <h1>Bem-vindo ao Estoque Marceneiro 🚀</h1>
-    <p>Login realizado com sucesso.</p>
-    <a href="/">Voltar para login</a>
+<body class="panel-body">
+    <div class="panel-layout">
+        <aside class="sidebar">
+            <div>
+                <span class="eyebrow">Estoque Marceneiro</span>
+                <h2>Dashboard</h2>
+                <p class="sidebar-copy">Resumo rapido para acompanhar a producao.</p>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="/menu">Menu</a>
+                <a href="/products">Produtos</a>
+                <a href="/customers">Clientes</a>
+                <a href="/orders">Orcamentos</a>
+                <a href="/dashboard" class="is-active">Dashboard</a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <span>{{ email }}</span>
+                <button class="btn btn-secondary btn-block" onclick="logout()">Sair</button>
+            </div>
+        </aside>
+
+        <main class="content-area">
+            <section class="hero-panel">
+                <div>
+                    <span class="eyebrow">Painel principal</span>
+                    <h1>Visao geral da operacao da marcenaria.</h1>
+                    <p>
+                        Veja rapidamente o volume cadastrado, itens com baixa
+                        quantidade e um retrato das frentes mais importantes.
+                    </p>
+                </div>
+            </section>
+
+            <section class="stats-grid">
+                <article class="stat-card">
+                    <span class="feature-kicker">Produtos</span>
+                    <strong>{{ products_total }}</strong>
+                    <p>Itens cadastrados no sistema.</p>
+                </article>
+
+                <article class="stat-card">
+                    <span class="feature-kicker">Baixo estoque</span>
+                    <strong>{{ low_stock_total }}</strong>
+                    <p>Produtos com 5 unidades ou menos.</p>
+                </article>
+
+                <article class="stat-card">
+                    <span class="feature-kicker">Clientes</span>
+                    <strong>{{ customers_total }}</strong>
+                    <p>Carteira ativa acompanhada pela equipe.</p>
+                </article>
+
+                <article class="stat-card">
+                    <span class="feature-kicker">Orcamentos</span>
+                    <strong>{{ orders_total }}</strong>
+                    <p>Pedidos e orcamentos salvos no sistema.</p>
+                </article>
+            </section>
+
+            <section class="split-grid">
+                <article class="surface-card">
+                    <h3>Proximos passos</h3>
+                    <ul class="clean-list">
+                        <li>Conferir itens com estoque baixo.</li>
+                        <li>Atualizar o cadastro dos clientes prioritarios.</li>
+                        <li>Registrar novos produtos finalizados.</li>
+                        <li>Emitir orcamentos com base no estoque atual.</li>
+                    </ul>
+                </article>
+
+                <article class="surface-card">
+                    <h3>Atalhos</h3>
+                    <div class="mini-actions">
+                        <a class="mini-link" href="/menu">Abrir menu</a>
+                        <a class="mini-link" href="/products">Abrir produtos</a>
+                        <a class="mini-link" href="/customers">Abrir clientes</a>
+                        <a class="mini-link" href="/orders">Abrir orcamentos</a>
+                    </div>
+                </article>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        async function logout() {
+            await fetch("/logout");
+            window.location.href = "/";
+        }
+    </script>
 </body>
 </html>
