@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criar Conta | Estoque Marceneiro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="auth-body">
+    <main class="auth-shell auth-shell-single">
+        <section class="auth-card auth-card-wide">
+            <div>
+                <span class="eyebrow">Criar conta</span>
+                <h2>Novo acesso ao sistema</h2>
+                <p class="muted">Informe o e-mail, receba um codigo e confirme sua conta antes de entrar.</p>
+                <p class="muted">O codigo sera enviado para o e-mail informado abaixo.</p>
+            </div>
+
+            <form id="registerForm" class="stack-form">
+                <label>
+                    <span>E-mail</span>
+                    <input type="email" id="registerEmail" placeholder="seuemail@empresa.com" required>
+                </label>
+
+                <label>
+                    <span>Senha</span>
+                    <input type="password" id="registerPassword" placeholder="Crie uma senha" required>
+                </label>
+
+                <label>
+                    <span>Confirmar senha</span>
+                    <input type="password" id="registerConfirmPassword" placeholder="Repita a senha" required>
+                </label>
+
+                <button type="button" id="sendCodeButton" class="btn btn-secondary btn-block">Enviar codigo de validacao</button>
+
+                <label>
+                    <span>Codigo de validacao</span>
+                    <input type="text" id="registerCode" maxlength="8" placeholder="ABC12345" required>
+                </label>
+
+                <button type="submit" class="btn btn-primary btn-block">Criar conta</button>
+            </form>
+
+            <p id="registerMsg" class="form-message"></p>
+            <p class="auth-link">Ja possui conta? <a href="/">Voltar para o login</a></p>
+        </section>
+    </main>
+
+    <script>
+        document.getElementById("sendCodeButton").addEventListener("click", async () => {
+            const payload = {
+                email: document.getElementById("registerEmail").value,
+                password: document.getElementById("registerPassword").value,
+                confirm_password: document.getElementById("registerConfirmPassword").value
+            };
+
+            const response = await fetch("/register/send-code", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+            document.getElementById("registerMsg").textContent = data.message;
+        });
+
+        document.getElementById("registerForm").addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            const payload = {
+                email: document.getElementById("registerEmail").value,
+                code: document.getElementById("registerCode").value
+            };
+
+            const response = await fetch("/register/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+            document.getElementById("registerMsg").textContent = data.message;
+
+            if (data.success) {
+                setTimeout(() => {
+                    window.location.href = "/";
+                }, 1000);
+            }
+        });
+    </script>
+</body>
+</html>
