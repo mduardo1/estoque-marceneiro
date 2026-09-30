@@ -48,44 +48,85 @@
     </main>
 
     <script>
+        const registerMsg = document.getElementById("registerMsg");
+        const sendCodeButton = document.getElementById("sendCodeButton");
+        const registerForm = document.getElementById("registerForm");
+        let sendingCode = false;
+        let verifyingCode = false;
+
+        async function fetchJson(url, payload) {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            let data;
+            try {
+                data = await response.json();
+            } catch (error) {
+                throw new Error("Nao foi possivel ler a resposta do servidor.");
+            }
+
+            return data;
+        }
+
+        function showMessage(message) {
+            registerMsg.textContent = message;
+        }
+
         document.getElementById("sendCodeButton").addEventListener("click", async () => {
+            if (sendingCode) {
+                return;
+            }
+
             const payload = {
                 email: document.getElementById("registerEmail").value,
                 password: document.getElementById("registerPassword").value,
                 confirm_password: document.getElementById("registerConfirmPassword").value
             };
 
-            const response = await fetch("/register/send-code", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
-            });
+            sendingCode = true;
+            sendCodeButton.disabled = true;
 
-            const data = await response.json();
-            document.getElementById("registerMsg").textContent = data.message;
+            try {
+                const data = await fetchJson("/register/send-code", payload);
+                showMessage(data.message || "Solicitacao concluida.");
+            } catch (error) {
+                showMessage(error.message || "Nao foi possivel enviar o codigo. Tente novamente.");
+            } finally {
+                sendingCode = false;
+                sendCodeButton.disabled = false;
+            }
         });
 
-        document.getElementById("registerForm").addEventListener("submit", async (event) => {
+        registerForm.addEventListener("submit", async (event) => {
             event.preventDefault();
+
+            if (verifyingCode) {
+                return;
+            }
 
             const payload = {
                 email: document.getElementById("registerEmail").value,
                 code: document.getElementById("registerCode").value
             };
 
-            const response = await fetch("/register/verify", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
-            });
+            verifyingCode = true;
 
-            const data = await response.json();
-            document.getElementById("registerMsg").textContent = data.message;
+            try {
+                const data = await fetchJson("/register/verify", payload);
+                showMessage(data.message || "Solicitacao concluida.");
 
-            if (data.success) {
-                setTimeout(() => {
-                    window.location.href = "/";
-                }, 1000);
+                if (data.success) {
+                    setTimeout(() => {
+                        window.location.href = "/";
+                    }, 1000);
+                }
+            } catch (error) {
+                showMessage(error.message || "Nao foi possivel criar a conta. Tente novamente.");
+            } finally {
+                verifyingCode = false;
             }
         });
     </script>

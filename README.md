@@ -70,10 +70,15 @@ Os clientes recebem o codigo no e-mail digitado na tela de criacao de conta.
 EMAIL_PROVIDER=gmail
 SMTP_HOST=
 SMTP_PORT=
-SMTP_USER=seu_remetente_do_sistema@gmail.com
-SMTP_PASSWORD=sua_senha_de_app_do_google
-SMTP_FROM=seu_remetente_do_sistema@gmail.com
+SMTP_USER=seuemail@gmail.com
+SMTP_PASSWORD=sua_senha_de_aplicativo_do_google
+SMTP_FROM=seuemail@gmail.com
 ```
+
+Para Gmail, use uma senha de aplicativo do Google em `SMTP_PASSWORD`.
+Nao use a senha normal da conta Google.
+Com `EMAIL_PROVIDER=gmail`, `SMTP_HOST` e `SMTP_PORT` podem ficar vazios;
+o sistema usara `smtp.gmail.com` na porta `587` com STARTTLS.
 
 ### Provedores suportados
 

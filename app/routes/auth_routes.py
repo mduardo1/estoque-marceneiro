@@ -1,9 +1,12 @@
 import os
+import sqlite3
 import secrets
 import smtplib
+import ssl
 import string
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
+from email.utils import parseaddr
 
 from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 
@@ -26,6 +29,10 @@ SMTP_PROVIDERS = {
 }
 
 
+class EmailDeliveryError(RuntimeError):
+    pass
+
+
 def _generate_code(length=8):
     alphabet = string.ascii_uppercase + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(length))
@@ -36,21 +43,69 @@ def _normalize_email(email):
     return email or None
 
 
+def _is_valid_email(email):
+    if not email or any(char.isspace() for char in email):
+        return False
+
+    _, parsed_email = parseaddr(email)
+    local_part, separator, domain = parsed_email.partition("@")
+    return (
+        parsed_email == email
+        and bool(separator)
+        and bool(local_part)
+        and "." in domain
+        and not domain.startswith(".")
+        and not domain.endswith(".")
+    )
+
+
+def _smtp_port(value, fallback):
+    raw_port = value or fallback or 587
+
+    try:
+        return int(raw_port)
+    except (TypeError, ValueError) as error:
+        raise EmailDeliveryError("Porta SMTP invalida. Verifique SMTP_PORT no arquivo .env.") from error
+
+
+def _authentication_error_message(error, provider_name):
+    smtp_code = getattr(error, "smtp_code", None)
+    smtp_error = getattr(error, "smtp_error", b"")
+    smtp_error_text = smtp_error.decode("utf-8", errors="ignore").lower() if isinstance(smtp_error, bytes) else str(smtp_error).lower()
+
+    if provider_name == "gmail":
+        if smtp_code == 534 or "application-specific password" in smtp_error_text or "app password" in smtp_error_text:
+            return "Senha de aplicativo do Google invalida ou ausente. Gere uma senha de aplicativo e atualize SMTP_PASSWORD."
+
+        if smtp_code == 535:
+            return "Usuario SMTP ou senha de aplicativo incorretos. Verifique SMTP_USER e SMTP_PASSWORD."
+
+        return "Autenticacao recusada pelo Gmail. Verifique se SMTP_USER e SMTP_PASSWORD usam uma senha de aplicativo."
+
+    return "Usuario ou senha SMTP incorretos. Verifique SMTP_USER e SMTP_PASSWORD."
+
+
 def _send_email(destination_email, subject, body):
     provider_name = os.getenv("EMAIL_PROVIDER", "custom").strip().lower()
     provider_config = SMTP_PROVIDERS.get(provider_name, SMTP_PROVIDERS["custom"])
 
     smtp_host = os.getenv("SMTP_HOST") or provider_config["host"]
-    smtp_port = int(os.getenv("SMTP_PORT") or provider_config["port"] or 587)
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_password = os.getenv("SMTP_PASSWORD")
-    smtp_from = os.getenv("SMTP_FROM", smtp_user or "")
+    smtp_port = _smtp_port(os.getenv("SMTP_PORT"), provider_config["port"])
+    smtp_user = (os.getenv("SMTP_USER") or "").strip()
+    smtp_password = os.getenv("SMTP_PASSWORD") or ""
+    smtp_from = (os.getenv("SMTP_FROM") or smtp_user).strip()
 
     if not smtp_host or not smtp_user or not smtp_password or not smtp_from:
-        raise RuntimeError(
-            "Envio de e-mail nao configurado. Defina EMAIL_PROVIDER e/ou "
+        raise EmailDeliveryError(
+            "Envio de e-mail nao configurado. Defina "
             "SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD e SMTP_FROM."
         )
+
+    if not _is_valid_email(destination_email):
+        raise EmailDeliveryError("Endereco de e-mail do destinatario invalido.")
+
+    if not _is_valid_email(smtp_from):
+        raise EmailDeliveryError("Endereco de e-mail remetente invalido. Verifique SMTP_FROM.")
 
     message = EmailMessage()
     message["Subject"] = subject
@@ -58,10 +113,30 @@ def _send_email(destination_email, subject, body):
     message["To"] = destination_email
     message.set_content(body)
 
-    with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
-        server.starttls()
-        server.login(smtp_user, smtp_password)
-        server.send_message(message)
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
+            server.ehlo()
+            server.starttls(context=ssl.create_default_context())
+            server.ehlo()
+            server.login(smtp_user, smtp_password)
+            server.send_message(message)
+    except smtplib.SMTPAuthenticationError as error:
+        raise EmailDeliveryError(_authentication_error_message(error, provider_name)) from error
+    except smtplib.SMTPRecipientsRefused as error:
+        raise EmailDeliveryError("Endereco de e-mail do destinatario recusado pelo servidor SMTP.") from error
+    except smtplib.SMTPSenderRefused as error:
+        raise EmailDeliveryError("Endereco de e-mail remetente recusado pelo servidor SMTP.") from error
+    except smtplib.SMTPConnectError as error:
+        raise EmailDeliveryError("Falha ao conectar ao servidor SMTP. Verifique host, porta e rede.") from error
+    except TimeoutError as error:
+        raise EmailDeliveryError("Tempo esgotado ao tentar enviar o e-mail. Verifique a conexao com a internet.") from error
+    except OSError as error:
+        raise EmailDeliveryError("Falha de conexao com o servidor SMTP. Verifique host, porta e rede.") from error
+    except smtplib.SMTPException as error:
+        raise EmailDeliveryError("Erro no envio SMTP. Verifique a configuracao do Gmail e tente novamente.") from error
+    except Exception as error:
+        raise EmailDeliveryError("Erro inesperado ao enviar o e-mail.") from error
+
 
 def _send_code(destination_email, code, purpose):
     _send_email(
@@ -77,6 +152,33 @@ def _send_code(destination_email, code, purpose):
 
 def _current_expiration():
     return (datetime.now(SAO_PAULO_TZ) + timedelta(minutes=15)).isoformat()
+
+
+def _is_expired(expires_at):
+    return datetime.now(SAO_PAULO_TZ) > datetime.fromisoformat(expires_at)
+
+
+def _log_verification_miss(cursor, email):
+    latest = cursor.execute(
+        """
+        SELECT id, email, used, expires_at, created_at
+        FROM account_verification_codes
+        WHERE email = ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (email,),
+    ).fetchone()
+
+    if latest:
+        print(
+            "[register/verify] Codigo nao encontrado para email normalizado. "
+            f"email={email}, latest_id={latest['id']}, used={latest['used']}, "
+            f"expires_at={latest['expires_at']}, created_at={latest['created_at']}"
+        )
+        return
+
+    print(f"[register/verify] Codigo nao encontrado. Nenhum registro pendente para email={email}")
 
 
 def _find_user_by_field(cursor, field_name, value):
@@ -155,6 +257,9 @@ def send_register_code():
     if not email:
         return jsonify({"success": False, "message": "Informe o e-mail."}), 400
 
+    if not _is_valid_email(email):
+        return jsonify({"success": False, "message": "Informe um e-mail valido."}), 400
+
     if password != confirm_password:
         return jsonify({"success": False, "message": "As senhas nao conferem."}), 400
 
@@ -170,36 +275,53 @@ def send_register_code():
         conn.close()
         return jsonify({"success": False, "message": "Ja existe uma conta com esse e-mail."}), 400
 
-    cursor.execute(
+    pending_code = cursor.execute(
         """
-        DELETE FROM account_verification_codes
-        WHERE email = ?
+        SELECT id, code, password, expires_at
+        FROM account_verification_codes
+        WHERE email = ? AND used = 0
+        ORDER BY id DESC
+        LIMIT 1
         """,
         (email,),
-    )
+    ).fetchone()
 
-    code = _generate_code()
-    cursor.execute(
-        """
-        INSERT INTO account_verification_codes (email, phone, password, code, expires_at)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (email, None, password, code, _current_expiration()),
-    )
-    verification_id = cursor.lastrowid
-    conn.commit()
+    if pending_code and pending_code["password"] == password and not _is_expired(pending_code["expires_at"]):
+        code = pending_code["code"]
+        verification_id = pending_code["id"]
+    else:
+        code = _generate_code()
+        cursor.execute(
+            """
+            INSERT INTO account_verification_codes (email, phone, password, code, expires_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (email, None, password, code, _current_expiration()),
+        )
+        verification_id = cursor.lastrowid
+        conn.commit()
 
     try:
         _send_code(email, code, "Criacao de conta")
     except Exception as error:
-        cursor.execute(
-            "DELETE FROM account_verification_codes WHERE id = ?",
-            (verification_id,),
-        )
-        conn.commit()
+        if not pending_code or pending_code["id"] != verification_id:
+            cursor.execute(
+                "DELETE FROM account_verification_codes WHERE id = ?",
+                (verification_id,),
+            )
+            conn.commit()
         conn.close()
         return jsonify({"success": False, "message": f"Nao foi possivel enviar o codigo: {error}"}), 500
 
+    cursor.execute(
+        """
+        UPDATE account_verification_codes
+        SET used = 1
+        WHERE email = ? AND id <> ? AND used = 0
+        """,
+        (email, verification_id),
+    )
+    conn.commit()
     conn.close()
     return jsonify({"success": True, "message": "Codigo enviado com sucesso."})
 
@@ -229,20 +351,26 @@ def verify_register_code():
     ).fetchone()
 
     if not verification:
+        _log_verification_miss(cursor, email)
         conn.close()
         return jsonify({"success": False, "message": "Codigo invalido."}), 400
 
-    if datetime.now(SAO_PAULO_TZ) > datetime.fromisoformat(verification["expires_at"]):
+    if _is_expired(verification["expires_at"]):
         conn.close()
         return jsonify({"success": False, "message": "Codigo expirado."}), 400
 
-    cursor.execute(
-        """
-        INSERT INTO users (username, password, email, phone, is_verified)
-        VALUES (?, ?, ?, ?, 1)
-        """,
-        (email, verification["password"], email, None),
-    )
+    try:
+        cursor.execute(
+            """
+            INSERT INTO users (username, password, email, phone, is_verified)
+            VALUES (?, ?, ?, ?, 1)
+            """,
+            (email, verification["password"], email, None),
+        )
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({"success": False, "message": "Ja existe uma conta com esse e-mail."}), 400
+
     cursor.execute(
         "UPDATE account_verification_codes SET used = 1 WHERE id = ?",
         (verification["id"],),
@@ -260,6 +388,9 @@ def forgot_password():
 
     if not email:
         return jsonify({"success": False, "message": "Informe o e-mail cadastrado."}), 400
+
+    if not _is_valid_email(email):
+        return jsonify({"success": False, "message": "Informe um e-mail valido."}), 400
 
     conn = get_connection()
     cursor = conn.cursor()
