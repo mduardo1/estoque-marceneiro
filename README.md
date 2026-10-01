@@ -1,70 +1,95 @@
 # Estoque Marceneiro
 
-Sistema simples para controle de estoque de uma marcenaria, com tela de login, cadastro de produtos e organizacao dos dados.
+Sistema web em Flask para controle de estoque de uma marcenaria, com autenticacao por e-mail, cadastro de clientes, cadastro de produtos, orcamentos e dashboard.
+
+## Objetivo
+
+Organizar o controle operacional de uma marcenaria em uma aplicacao simples, local e baseada em SQLite, mantendo produtos, clientes e orcamentos em um unico fluxo.
+
+## Funcionalidades
+
+- Login por e-mail e senha.
+- Criacao de conta com codigo de verificacao enviado por e-mail.
+- Recuperacao de senha por e-mail.
+- Cadastro, listagem e remocao de produtos.
+- Cadastro, listagem e remocao de clientes.
+- Emissao de orcamentos com baixa de estoque.
+- Dashboard com resumo da operacao.
 
 ## Tecnologias Utilizadas
 
 - Python
 - Flask
+- SQLite
 - HTML
 - CSS
 - JavaScript
-- SQLite
-- Git e GitHub
+- python-dotenv
 
 ## Estrutura do Projeto
 
 ```text
 estoque-marceneiro/
-├── app/
-│   ├── database.py
-│   ├── main.py
-│   ├── models/
-│   ├── routes/
-│   ├── services/
-│   ├── static/
-│   │   ├── css/
-│   │   └── js/
-│   └── templates/
-├── requirements.txt
-├── README.md
-└── database.db
+|-- app/
+|   |-- database.py
+|   |-- main.py
+|   |-- models/
+|   |-- routes/
+|   |-- services/
+|   |-- static/
+|   |   |-- css/
+|   |   `-- js/
+|   `-- templates/
+|-- .env.example
+|-- .gitignore
+|-- README.md
+|-- requirements.txt
+`-- database.db
 ```
 
-### Principais pastas e arquivos
+### Principais Pastas e Arquivos
 
-- `app/`: nucleo da aplicacao Flask
-- `app/routes/`: rotas e fluxos de navegacao do sistema
-- `app/templates/`: telas HTML
-- `app/static/`: arquivos estaticos, como CSS e JavaScript
-- `app/database.py`: conexao, criacao e evolucao da estrutura do banco SQLite
-- `app/models/`: modelos de dominio utilizados pelo projeto
-- `app/main.py`: ponto de entrada da aplicacao Flask
-- `requirements.txt`: dependencias Python
-- `README.md`: documentacao principal do projeto
+- `app/`: codigo principal da aplicacao Flask.
+- `app/main.py`: ponto de entrada da aplicacao.
+- `app/database.py`: conexao e criacao das tabelas SQLite.
+- `app/routes/`: rotas HTTP e fluxos de navegacao.
+- `app/templates/`: paginas HTML renderizadas pelo Flask.
+- `app/static/`: arquivos CSS e JavaScript.
+- `.env.example`: modelo seguro das variaveis de ambiente.
+- `requirements.txt`: dependencias Python do projeto.
+- `database.db`: banco SQLite local, ignorado pelo Git.
 
-## Como Executar o Projeto
+## Instalacao no Windows
 
-### VS Code ou terminal
+Clone o repositorio e entre na pasta do projeto:
 
-```bash
+```powershell
 git clone URL_DO_REPOSITORIO
 cd estoque-marceneiro
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-python -m app.main
 ```
 
-## Autenticacao e E-mail
+Crie e ative um ambiente virtual:
 
-O projeto le o arquivo `.env` automaticamente ao iniciar.
+```powershell
+python -m venv venv
+venv\Scripts\activate
+```
 
-O `.env` guarda somente o e-mail remetente do sistema.
-Ele e configurado uma unica vez.
-Os clientes recebem o codigo no e-mail digitado na tela de criacao de conta.
+Instale as dependencias:
 
-### Exemplo de `.env` com Gmail
+```powershell
+pip install -r requirements.txt
+```
+
+## Configuracao do `.env`
+
+Copie o arquivo de exemplo:
+
+```powershell
+copy .env.example .env
+```
+
+Depois edite o `.env` local com as configuracoes reais de e-mail:
 
 ```env
 EMAIL_PROVIDER=gmail
@@ -73,14 +98,12 @@ SMTP_PORT=
 SMTP_USER=seuemail@gmail.com
 SMTP_PASSWORD=sua_senha_de_aplicativo_do_google
 SMTP_FROM=seuemail@gmail.com
+SECRET_KEY=troque_por_uma_chave_secreta_segura
 ```
 
-Para Gmail, use uma senha de aplicativo do Google em `SMTP_PASSWORD`.
-Nao use a senha normal da conta Google.
-Com `EMAIL_PROVIDER=gmail`, `SMTP_HOST` e `SMTP_PORT` podem ficar vazios;
-o sistema usara `smtp.gmail.com` na porta `587` com STARTTLS.
+Para Gmail, use uma senha de aplicativo do Google em `SMTP_PASSWORD`. Nao use a senha normal da conta Google. Com `EMAIL_PROVIDER=gmail`, `SMTP_HOST` e `SMTP_PORT` podem ficar vazios; o sistema usa `smtp.gmail.com` na porta `587` com STARTTLS.
 
-### Provedores suportados
+Provedores suportados:
 
 - `gmail`
 - `outlook`
@@ -92,49 +115,33 @@ o sistema usara `smtp.gmail.com` na porta `587` com STARTTLS.
 - `bol`
 - `custom`
 
-## Estrategia de Branches
+## Como Iniciar
 
-### Branches principais
+Com o ambiente virtual ativado, execute:
 
-- `main`: somente versoes estaveis
-- `develop`: branch principal de desenvolvimento
+```powershell
+python -m app.main
+```
 
-### Branches de funcionalidade
+Por padrao, o Flask inicia em:
 
-- `feature/auth-login`
-- `feature/produtos`
-- `feature/clientes`
-- `feature/orcamentos`
-- `feature/dashboard`
-- `feature/database`
-- `feature/readme-docs`
+```text
+http://127.0.0.1:5000
+```
 
-### Branches de correcao
+## Cuidados de Seguranca
 
-- `fix/nome-da-correcao`
+- Nunca envie credenciais reais para o GitHub.
+- Mantenha o arquivo `.env` apenas no ambiente local.
+- Use `.env.example` somente com valores ficticios ou placeholders.
+- O banco `database.db` contem dados locais e deve permanecer fora do Git.
+- Revise `git status` antes de qualquer commit para confirmar que arquivos sensiveis nao foram adicionados.
 
-### Fluxo recomendado
+## Dependencias
 
-1. Criar a branch a partir de `develop`
-2. Fazer alteracoes pequenas e focadas
-3. Criar commits curtos e descritivos
-4. Validar localmente
-5. Integrar em `develop`
-6. Levar para `main` apenas quando estiver estavel
+As dependencias estao fixadas em `requirements.txt`:
 
-## Funcionalidades Atuais
-
-- Login por e-mail
-- Criacao de conta com validacao por codigo enviado por e-mail
-- Recuperacao de senha por e-mail
-- Cadastro e consulta de produtos
-- Cadastro de clientes
-- Emissao de orcamentos
-- Dashboard com resumo da operacao
-
-## Boas Praticas para Evolucao
-
-- Nao desenvolver diretamente na `main`
-- Separar cada frente de trabalho por branch
-- Evitar misturar mudancas de telas, banco e documentacao no mesmo commit
-- Priorizar commits pequenos e claros
+```text
+Flask==3.1.0
+python-dotenv==1.0.1
+```
